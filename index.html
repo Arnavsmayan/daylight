@@ -81,6 +81,23 @@
                 line-height: 1.5;
                 max-width: 80%;
             }
+            .msg.assistant {
+                max-width: 90%;
+            }
+            .msg .content p + p {
+                margin-top: 0.65rem;
+            }
+            .msg .content ul,
+            .msg .content ol {
+                margin: 0.4rem 0 0.4rem 1.25rem;
+            }
+            .msg .content li + li {
+                margin-top: 0.25rem;
+            }
+            .tool {
+                max-width: 100%;
+                border-radius: 4px;
+            }
             .msg.user {
                 align-self: flex-end;
                 text-align: right;
@@ -216,15 +233,57 @@
                     "msg " +
                     (role === "you" ? "user" : "assistant") +
                     (isLoading ? " loading" : "");
-                div.innerHTML =
-                    '<div class="role">' +
-                    role +
-                    '</div><div class="content">' +
-                    text +
-                    "</div>";
+                div.innerHTML = '<div class="role">' + role + '</div><div class="content"></div>';
+                div.querySelector(".content").textContent = text;
                 messages.appendChild(div);
                 messages.scrollTop = messages.scrollHeight;
                 return div;
+            }
+
+            function renderMarkdown(text) {
+                const escapeHtml = (value) =>
+                    value.replace(/[&<>"']/g, (char) => ({
+                        "&": "&amp;",
+                        "<": "&lt;",
+                        ">": "&gt;",
+                        '"': "&quot;",
+                        "'": "&#39;",
+                    })[char]);
+                const inline = (value) =>
+                    escapeHtml(value).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+                const blocks = text.trim().split(/\n\s*\n/);
+                return blocks.map((block) => {
+                    const lines = block.split("\n");
+                    if (lines.every((line) => /^\s*[-*]\s+/.test(line))) {
+                        return "<ul>" + lines.map((line) => "<li>" + inline(line.replace(/^\s*[-*]\s+/, "")) + "</li>").join("") + "</ul>";
+                    }
+                    if (lines.every((line) => /^\s*\d+[.)]\s+/.test(line))) {
+                        return "<ol>" + lines.map((line) => "<li>" + inline(line.replace(/^\s*\d+[.)]\s+/, "")) + "</li>").join("") + "</ol>";
+                    }
+                    return "<p>" + lines.map(inline).join("<br>") + "</p>";
+                }).join("");
+            }
+
+            function formatToolResult(result) {
+                try {
+                    const data = typeof result === "string" ? JSON.parse(result) : result;
+                    if (data.error) return data.error;
+                    if (Array.isArray(data.events)) {
+                        if (!data.events.length) return "No calendar events found.";
+                        return data.events.map((event) =>
+                            `${event.summary}: ${event.start || "all day"}${event.end ? " to " + event.end : ""}`
+                        ).join("\n");
+                    }
+                    if (Array.isArray(data.messages)) {
+                        if (!data.messages.length) return "No matching emails found.";
+                        return data.messages.map((email) =>
+                            `${email.subject || "(No subject)"} | ${email.date || ""}\n${email.snippet || ""}`
+                        ).join("\n\n");
+                    }
+                    return JSON.stringify(data, null, 2);
+                } catch {
+                    return String(result);
+                }
             }
 
             async function send() {
@@ -258,13 +317,12 @@
                         div.appendChild(label);
                         div.appendChild(
                             document.createTextNode(
-                                call.name + "(" + JSON.stringify(call.args) + ")\n→ " + call.result,
+                                call.name + "(" + JSON.stringify(call.args) + ")\n" + formatToolResult(call.result),
                             ),
                         );
                         messages.insertBefore(div, loading);
                     }
-                    loading.querySelector(".content").textContent =
-                        data.response;
+                    loading.querySelector(".content").innerHTML = renderMarkdown(data.response);
                     loading.classList.remove("loading");
                 } catch (e) {
                     loading.querySelector(".content").textContent =

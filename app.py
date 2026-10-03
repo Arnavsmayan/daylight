@@ -33,7 +33,10 @@ SYSTEM_PROMPT = (
     "Use the current ET date provided in the conversation for today, tomorrow, and "
     "other relative dates. Interpret next week as Sunday through Saturday. Distinguish "
     "an email's sent date from the event date described inside it. Call "
-    "get_calendar_events for calendar questions and search_gmail for email questions."
+    "get_calendar_events for calendar questions and search_gmail for email questions. "
+    "After receiving tool results, read and understand them, then explain the useful "
+    "information in a clear, natural response. Do not repeat raw JSON or use Markdown "
+    "formatting."
 )
 MAX_TOOL_ROUNDS = 15
 
