@@ -14,8 +14,7 @@ from tools import TOOLS, run_tool
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. When asked about a schedule or calendar for a date, "
-    "call get_calendar_events first and summarize the returned events. If the user asks "
-    "about weather or outdoor conditions, call get_weather first."
+    "call get_calendar_events first and summarize the returned events."
 )
 MAX_TOOL_ROUNDS = 5
 

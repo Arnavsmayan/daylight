@@ -16,9 +16,7 @@
    project, so run `gemini-hello-world` first to check it.
 3. `uv run app.py`, then open http://localhost:8000
 
-Try: "Is it nice enough to go for a walk in New York?"
-
-The weather comes from Open-Meteo, which needs no API key.
+Try: "What's on my calendar on 2026-10-03?"
 
 ## Google Calendar lookup
 
