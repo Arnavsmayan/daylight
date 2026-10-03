@@ -34,6 +34,13 @@
                 min-height: 450px;
                 max-height: 70vh;
             }
+            #toolbar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.75rem 1.5rem;
+                border-bottom: 1px solid #e0e0e0;
+            }
             .msg {
                 line-height: 1.5;
                 max-width: 80%;
@@ -102,6 +109,10 @@
     </head>
     <body>
         <div id="container">
+            <div id="toolbar">
+                <strong>Daylight</strong>
+                <button id="connect-btn">Connect Google</button>
+            </div>
             <div id="messages"></div>
             <div id="input-area">
                 <input
@@ -117,7 +128,24 @@
             const messages = document.getElementById("messages");
             const userInput = document.getElementById("user-input");
             const sendBtn = document.getElementById("send-btn");
+            const connectBtn = document.getElementById("connect-btn");
             let sessionId = null;
+
+            connectBtn.addEventListener("click", function () {
+                window.open("/auth/google", "daylight-google-auth", "popup,width=520,height=680");
+            });
+
+            window.addEventListener("message", function (event) {
+                if (event.origin === window.location.origin && event.data === "daylight-google-connected") {
+                    connectBtn.textContent = "Google connected";
+                }
+            });
+
+            fetch("/auth/status")
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.connected) connectBtn.textContent = "Google connected";
+                });
 
             function addMessage(role, text, isLoading = false) {
                 const div = document.createElement("div");

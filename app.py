@@ -9,7 +9,7 @@ import litellm
 import requests
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 
 from tools import TOOLS, run_tool
@@ -18,7 +18,8 @@ from tools import TOOLS, run_tool
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. When asked about a schedule or calendar for a date, "
-    "call get_calendar_events first and summarize the returned events."
+    "call get_calendar_events first and summarize the returned events. When asked to "
+    "find or check an email, call search_gmail and summarize matching messages."
 )
 MAX_TOOL_ROUNDS = 5
 
@@ -105,7 +106,7 @@ def google_login(request: Request):
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": "https://www.googleapis.com/auth/calendar.events.readonly",
+        "scope": "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/gmail.readonly",
         "access_type": "offline",
         "prompt": "consent",
         "state": state,
@@ -158,7 +159,16 @@ def google_callback(
         return PlainTextResponse("Google did not return a refresh token. Try signing in again.", status_code=400)
 
     calendar_tokens[browser_id] = refresh_token
-    return RedirectResponse("/", status_code=303)
+    return HTMLResponse(
+        "<p>Google connected. Close this window to return to Daylight.</p>"
+        "<script>window.opener.postMessage('daylight-google-connected', window.location.origin);window.close();</script>"
+    )
+
+
+@app.get("/auth/status")
+def auth_status(request: Request):
+    browser_id = request.cookies.get("daylight_user")
+    return {"connected": bool(calendar_tokens.get(browser_id))}
 
 
 @app.post("/chat", response_model=ChatResponse)
