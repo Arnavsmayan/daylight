@@ -8,12 +8,11 @@ import requests
 # Open-Meteo is free and needs no API key.
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 
 
 def get_calendar_events(date: str) -> str:
-    """List the signed-in user's Google Calendar events for a UTC date."""
+    """List Google Calendar events for a UTC date using a supplied access token."""
     try:
         from datetime import date as date_type
 
@@ -21,33 +20,11 @@ def get_calendar_events(date: str) -> str:
     except ValueError:
         return json.dumps({"error": "Invalid date. Use YYYY-MM-DD, for example 2026-10-03."})
 
-    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
-    refresh_token = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN")
-    if not all((client_id, client_secret, refresh_token)):
-        return json.dumps({
-            "error": "Google Calendar is not configured. Set GOOGLE_OAUTH_CLIENT_ID, "
-            "GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN."
-        })
+    access_token = os.getenv("GOOGLE_CALENDAR_ACCESS_TOKEN")
+    if not access_token:
+        return json.dumps({"error": "Set GOOGLE_CALENDAR_ACCESS_TOKEN to enable calendar lookup."})
 
     try:
-        token_response = requests.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            },
-            timeout=10,
-        )
-        if not token_response.ok:
-            return json.dumps({
-                "error": f"Google token refresh failed ({token_response.status_code}). "
-                "Check the OAuth client and refresh token."
-            })
-        access_token = token_response.json()["access_token"]
-
         start = f"{requested_date.isoformat()}T00:00:00Z"
         end = f"{requested_date.isoformat()}T23:59:59Z"
         events_response = requests.get(

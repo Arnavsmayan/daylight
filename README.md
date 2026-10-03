@@ -1,4 +1,4 @@
-# gemini-web-tool-calling
+# Daylight: Your AI calendar planner
 
 `qwen-tool-calling` behind a web server, pointed at Gemini.
 
@@ -25,13 +25,11 @@ The weather comes from Open-Meteo, which needs no API key.
 Ask for events on a date, for example: "What's on my calendar on 2026-10-03?"
 The `get_calendar_events` tool reads the primary calendar for that UTC date.
 
-Configure these environment variables locally or as Cloud Run secrets:
+For a basic local demo, set this environment variable:
 
-- `GOOGLE_OAUTH_CLIENT_ID`
-- `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REFRESH_TOKEN`
+- `GOOGLE_CALENDAR_ACCESS_TOKEN`
 
-The OAuth grant must include the read-only Calendar scope
-`https://www.googleapis.com/auth/calendar.events.readonly`. Keep these values
-out of the repository. Enable the Google Calendar API in the Google Cloud
-project. The tool only reads events; it does not create or edit them.
+The token needs the read-only Calendar scope
+`https://www.googleapis.com/auth/calendar.events.readonly`. Access tokens expire,
+so replace it when Google rejects it. Enable the Google Calendar API in the
+Google Cloud project. The tool only reads events; it does not create or edit them.
