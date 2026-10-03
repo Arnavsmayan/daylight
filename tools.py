@@ -2,16 +2,11 @@
 
 import json
 import os
-from datetime import date as date_type, datetime, time, timedelta
-from email.utils import parsedate_to_datetime
-from zoneinfo import ZoneInfo
-
 import requests
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 GMAIL_MESSAGES_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
-EASTERN = ZoneInfo("America/New_York")
 
 
 def get_access_token(refresh_token: str) -> str:
@@ -33,18 +28,14 @@ def get_calendar_events(date: str, refresh_token: str | None = None) -> str:
     if not refresh_token:
         return json.dumps({"error": "Sign in with Google first at /auth/google."})
 
-    local_date = date_type.fromisoformat(date)
-    start = datetime.combine(local_date, time.min, EASTERN)
-    end = datetime.combine(local_date + timedelta(days=1), time.min, EASTERN)
-
     try:
         access_token = get_access_token(refresh_token)
         response = requests.get(
             GOOGLE_EVENTS_URL,
             headers={"Authorization": f"Bearer {access_token}"},
             params={
-                "timeMin": start.isoformat(),
-                "timeMax": end.isoformat(),
+                "timeMin": f"{date}T00:00:00Z",
+                "timeMax": f"{date}T23:59:59Z",
                 "singleEvents": "true",
                 "orderBy": "startTime",
             },
@@ -54,22 +45,16 @@ def get_calendar_events(date: str, refresh_token: str | None = None) -> str:
     except requests.RequestException as error:
         return json.dumps({"error": f"Calendar request failed: {error}"})
 
-    formatted_events = []
-    for event in events:
-        formatted = {}
-        for field in ("start", "end"):
-            value = event.get(field, {}).get("dateTime", event.get(field, {}).get("date"))
-            if value and "T" in value:
-                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                value = parsed.astimezone(EASTERN).strftime("%b %d, %Y %I:%M %p ET")
-            formatted[field] = value
-        formatted["summary"] = event.get("summary", "(No title)")
-        formatted_events.append(formatted)
-
     return json.dumps({
         "date": date,
-        "timezone": "America/New_York",
-        "events": formatted_events,
+        "events": [
+            {
+                "summary": event.get("summary", "(No title)"),
+                "start": event.get("start", {}).get("dateTime", event.get("start", {}).get("date")),
+                "end": event.get("end", {}).get("dateTime", event.get("end", {}).get("date")),
+            }
+            for event in events
+        ],
     })
 
 
@@ -106,14 +91,10 @@ def search_gmail(query: str, refresh_token: str | None = None) -> str:
                 for h in item.get("payload", {}).get("headers", [])
             }
             email_date = message_headers.get("date")
-            if email_date:
-                email_date = parsedate_to_datetime(email_date).astimezone(EASTERN).strftime(
-                    "%b %d, %Y %I:%M %p ET"
-                )
             results.append({
                 "from": message_headers.get("from"),
                 "subject": message_headers.get("subject"),
-                "email_date": email_date,
+                "date": email_date,
                 "snippet": item.get("snippet", ""),
             })
     except requests.RequestException as error:
@@ -147,7 +128,7 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format, interpreted in Eastern Time."},
+                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format."},
                 },
                 "required": ["date"],
             },
