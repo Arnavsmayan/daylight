@@ -2,8 +2,10 @@ import json
 import os
 import secrets
 import uuid
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 import litellm
 import requests
@@ -17,9 +19,12 @@ from tools import TOOLS, run_tool
 # --- Config ---
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant. When asked about a schedule or calendar for a date, "
-    "call get_calendar_events first and summarize the returned events. When asked to "
-    "find or check an email, call search_gmail and summarize matching messages."
+    "You are a helpful calendar assistant. Use Eastern Time (America/New_York) for "
+    "all dates and times. Interpret today and other relative dates using the current "
+    "ET date and time included below. Convert email and calendar timestamps to ET "
+    "before answering. Distinguish an email's sent date from the event date described "
+    "inside it. Call get_calendar_events for calendar questions and search_gmail for "
+    "email questions."
 )
 MAX_TOOL_ROUNDS = 5
 
@@ -175,8 +180,12 @@ def auth_status(request: Request):
 def chat(request: ChatRequest, http_request: Request):
     # Get or create the session
     session_id = request.session_id or str(uuid.uuid4())
+    now_et = datetime.now(ZoneInfo("America/New_York")).strftime("%A, %B %d, %Y %I:%M %p ET")
+    system_message = f"{SYSTEM_PROMPT} Current ET date and time: {now_et}."
     if session_id not in sessions:
-        sessions[session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        sessions[session_id] = [{"role": "system", "content": system_message}]
+    else:
+        sessions[session_id][0]["content"] = system_message
 
     # Append user's message to the context
     sessions[session_id] += [{"role": "user", "content": request.message}]
