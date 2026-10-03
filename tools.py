@@ -110,7 +110,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "search_gmail",
-            "description": "Search the signed-in user's Gmail messages and return matching snippets.",
+            "description": "Search the signed-in user's Gmail messages and return matching snippets. For date searches, use a date format such as 'Oct 8', 'October 8', '10/8', or '8/10'; verify the actual event date from the returned email snippet.",
             "parameters": {
                 "type": "object",
                 "properties": {
