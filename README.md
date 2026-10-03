@@ -1,28 +1,3 @@
 # Daylight: Your AI calendar planner
 
-`qwen-tool-calling` behind a web server, pointed at Gemini.
-
-- The harness loop is the same one from `qwen-tool-calling`, wrapped in `run_agent()`.
-- The session store and `/chat` endpoint are the ones from `qwen-web-chat`.
-- Only the model changed: `vertex_ai/gemini-3.5-flash-lite` in the `global` location.
-- `/chat` also returns the tool calls the harness made, and the page shows them
-  above the assistant's answer.
-
-## Setup
-
-1. A GCP project with billing and the Agent Platform API enabled
-   (older docs and the endpoint itself still call it Vertex AI)
-2. `gcloud auth application-default login`. The app uses your gcloud default
-   project, so run `gemini-hello-world` first to check it.
-3. `uv run app.py`, then open http://localhost:8000
-
-Try: "What's on my calendar on 2026-10-03?"
-
-## Google Calendar lookup
-
-Ask for events on a date, for example: "What's on my calendar on 2026-10-03?"
-The `get_calendar_events` tool reads the primary calendar for that UTC date.
-
-Set `GOOGLE_CALENDAR_ACCESS_TOKEN` with the Calendar read-only scope
-(`https://www.googleapis.com/auth/calendar.events.readonly`). Access tokens
-expire, so replace it when needed.
+Daylight reads your Google Calendar and answers questions about your schedule.
