@@ -1,1 +1,1 @@
-Daylight: Your AI calendar planner
+Daylight: The AI calendar planning agent
