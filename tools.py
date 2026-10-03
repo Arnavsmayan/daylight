@@ -12,45 +12,29 @@ GOOGLE_EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/ev
 
 
 def get_calendar_events(date: str) -> str:
-    """List Google Calendar events for a UTC date using a supplied access token."""
-    try:
-        from datetime import date as date_type
-
-        requested_date = date_type.fromisoformat(date)
-    except ValueError:
-        return json.dumps({"error": "Invalid date. Use YYYY-MM-DD, for example 2026-10-03."})
-
-    access_token = os.getenv("GOOGLE_CALENDAR_ACCESS_TOKEN")
-    if not access_token:
-        return json.dumps({"error": "Set GOOGLE_CALENDAR_ACCESS_TOKEN to enable calendar lookup."})
+    """Get events from the primary Google Calendar."""
+    token = os.getenv("GOOGLE_CALENDAR_ACCESS_TOKEN")
+    if not token:
+        return json.dumps({"error": "Set GOOGLE_CALENDAR_ACCESS_TOKEN first."})
 
     try:
-        start = f"{requested_date.isoformat()}T00:00:00Z"
-        end = f"{requested_date.isoformat()}T23:59:59Z"
-        events_response = requests.get(
+        response = requests.get(
             GOOGLE_EVENTS_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers={"Authorization": f"Bearer {token}"},
             params={
-                "timeMin": start,
-                "timeMax": end,
+                "timeMin": f"{date}T00:00:00Z",
+                "timeMax": f"{date}T23:59:59Z",
                 "singleEvents": "true",
                 "orderBy": "startTime",
-                "maxResults": 50,
             },
-            timeout=10,
         )
-        if not events_response.ok:
-            return json.dumps({
-                "error": f"Google Calendar lookup failed ({events_response.status_code}). "
-                "Check that Calendar API is enabled and the account granted read access."
-            })
-        events = events_response.json().get("items", [])
-    except (requests.RequestException, ValueError, KeyError) as error:
-        return json.dumps({"error": f"Google Calendar request failed: {error}"})
+        response.raise_for_status()
+        events = response.json().get("items", [])
+    except requests.RequestException as error:
+        return json.dumps({"error": f"Calendar request failed: {error}"})
 
     return json.dumps({
-        "date": requested_date.isoformat(),
-        "timezone": "UTC",
+        "date": date,
         "events": [
             {
                 "summary": event.get("summary", "(No title)"),
@@ -99,7 +83,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_calendar_events",
-            "description": "Look up the signed-in user's Google Calendar events for a specific date.",
+            "description": "Look up events in the configured Google Calendar for a date.",
             "parameters": {
                 "type": "object",
                 "properties": {

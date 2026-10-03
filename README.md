@@ -25,11 +25,6 @@ The weather comes from Open-Meteo, which needs no API key.
 Ask for events on a date, for example: "What's on my calendar on 2026-10-03?"
 The `get_calendar_events` tool reads the primary calendar for that UTC date.
 
-For a basic local demo, set this environment variable:
-
-- `GOOGLE_CALENDAR_ACCESS_TOKEN`
-
-The token needs the read-only Calendar scope
-`https://www.googleapis.com/auth/calendar.events.readonly`. Access tokens expire,
-so replace it when Google rejects it. Enable the Google Calendar API in the
-Google Cloud project. The tool only reads events; it does not create or edit them.
+Set `GOOGLE_CALENDAR_ACCESS_TOKEN` with the Calendar read-only scope
+(`https://www.googleapis.com/auth/calendar.events.readonly`). Access tokens
+expire, so replace it when needed.
