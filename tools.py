@@ -2,22 +2,32 @@
 
 import json
 import os
-
 import requests
 
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 
 
-def get_calendar_events(date: str) -> str:
+def get_calendar_events(date: str, refresh_token: str | None = None) -> str:
     """Get events from the primary Google Calendar."""
-    token = os.getenv("GOOGLE_CALENDAR_ACCESS_TOKEN")
-    if not token:
-        return json.dumps({"error": "Set GOOGLE_CALENDAR_ACCESS_TOKEN first."})
+    if not refresh_token:
+        return json.dumps({"error": "Sign in with Google first at /auth/google."})
 
     try:
+        token_response = requests.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "client_id": os.getenv("GOOGLE_OAUTH_CLIENT_ID"),
+                "client_secret": os.getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+        )
+        token_response.raise_for_status()
+        access_token = token_response.json()["access_token"]
         response = requests.get(
             GOOGLE_EVENTS_URL,
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"Authorization": f"Bearer {access_token}"},
             params={
                 "timeMin": f"{date}T00:00:00Z",
                 "timeMax": f"{date}T23:59:59Z",
@@ -49,7 +59,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_calendar_events",
-            "description": "Look up events in the configured Google Calendar for a date.",
+            "description": "Look up events in the signed-in user's Google Calendar for a date.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -65,11 +75,11 @@ TOOLS = [
 TOOL_MAP = {"get_calendar_events": get_calendar_events}
 
 
-def run_tool(name: str, args: dict) -> str:
+def run_tool(name: str, args: dict, refresh_token: str | None = None) -> str:
     """Run one tool call. Models invent tool names and arguments; never let that crash the loop."""
     if name not in TOOL_MAP:
         return json.dumps({"error": f"Unknown tool '{name}'. Available: {list(TOOL_MAP)}"})
     try:
-        return TOOL_MAP[name](**args)
+        return TOOL_MAP[name](**args, refresh_token=refresh_token)
     except TypeError as e:
         return json.dumps({"error": f"Bad arguments for {name}: {e}"})

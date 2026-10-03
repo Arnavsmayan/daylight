@@ -1,11 +1,15 @@
 import json
+import os
+import secrets
 import uuid
 from pathlib import Path
+from urllib.parse import urlencode
 
 import litellm
+import requests
 import uvicorn
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 
 from tools import TOOLS, run_tool
@@ -21,7 +25,7 @@ MAX_TOOL_ROUNDS = 5
 # --- The Harness ---
 
 
-def run_agent(messages: list[dict]) -> tuple[str, list[dict]]:
+def run_agent(messages: list[dict], refresh_token: str | None = None) -> tuple[str, list[dict]]:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text and a record of every tool call made along the way.
@@ -47,7 +51,7 @@ def run_agent(messages: list[dict]) -> tuple[str, list[dict]]:
         # The harness, not the model, runs each tool and appends the result
         for call in reply.tool_calls:
             args = json.loads(call.function.arguments)
-            result = run_tool(call.function.name, args)
+            result = run_tool(call.function.name, args, refresh_token)
             tool_calls += [{"name": call.function.name, "args": args, "result": result}]
 
             messages += [{"role": "tool", "tool_call_id": call.id, "content": result}]
@@ -59,6 +63,12 @@ def run_agent(messages: list[dict]) -> tuple[str, list[dict]]:
 
 # session_id -> list of messages. In-memory, single process.
 sessions: dict[str, list] = {}
+calendar_tokens: dict[str, str] = {}
+oauth_states: dict[str, str] = {}
+
+
+def google_redirect_uri(request: Request) -> str:
+    return os.getenv("GOOGLE_REDIRECT_URI") or str(request.url_for("google_callback"))
 
 # --- FastAPI App ---
 
@@ -81,8 +91,78 @@ def index():
     return FileResponse(Path(__file__).parent / "index.html")
 
 
+@app.get("/auth/google")
+def google_login(request: Request):
+    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+    if not client_id:
+        return PlainTextResponse("Set GOOGLE_OAUTH_CLIENT_ID in Cloud Run.", status_code=500)
+
+    browser_id = request.cookies.get("daylight_user") or uuid.uuid4().hex
+    state = secrets.token_urlsafe(24)
+    oauth_states[state] = browser_id
+    redirect_uri = google_redirect_uri(request)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "https://www.googleapis.com/auth/calendar.events.readonly",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    }
+    response = RedirectResponse(
+        f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    )
+    response.set_cookie(
+        "daylight_user",
+        browser_id,
+        httponly=True,
+        samesite="lax",
+        secure=redirect_uri.startswith("https://"),
+    )
+    return response
+
+
+@app.get("/auth/callback", name="google_callback")
+def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+):
+    if error:
+        return PlainTextResponse(f"Google sign-in failed: {error}", status_code=400)
+
+    browser_id = request.cookies.get("daylight_user")
+    if not browser_id or oauth_states.pop(state, None) != browser_id or not code:
+        return PlainTextResponse("Google sign-in failed. Try /auth/google again.", status_code=400)
+
+    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return PlainTextResponse("Set Google OAuth client ID and secret in Cloud Run.", status_code=500)
+
+    token_response = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": google_redirect_uri(request),
+        },
+    )
+    token_response.raise_for_status()
+    refresh_token = token_response.json().get("refresh_token")
+    if not refresh_token:
+        return PlainTextResponse("Google did not return a refresh token. Try signing in again.", status_code=400)
+
+    calendar_tokens[browser_id] = refresh_token
+    return RedirectResponse("/", status_code=303)
+
+
 @app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, http_request: Request):
     # Get or create the session
     session_id = request.session_id or str(uuid.uuid4())
     if session_id not in sessions:
@@ -92,7 +172,8 @@ def chat(request: ChatRequest):
     sessions[session_id] += [{"role": "user", "content": request.message}]
 
     try:
-        response, tool_calls = run_agent(sessions[session_id])
+        browser_id = http_request.cookies.get("daylight_user")
+        response, tool_calls = run_agent(sessions[session_id], calendar_tokens.get(browser_id))
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         response, tool_calls = f"Model call failed: {type(e).__name__}: {str(e)[:300]}", []
