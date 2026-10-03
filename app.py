@@ -35,7 +35,7 @@ SYSTEM_PROMPT = (
     "an email's sent date from the event date described inside it. Call "
     "get_calendar_events for calendar questions and search_gmail for email questions."
 )
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 15
 
 # --- The Harness ---
 
