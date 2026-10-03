@@ -24,8 +24,8 @@ SYSTEM_PROMPT = (
     "details and commitments, such as an event time mentioned in an email. Use that "
     "information to answer schedule questions and identify possible calendar conflicts. "
     "Do not offer to draft or send emails; email is only used to find calendar-related "
-    "information. Calendar event creation and deletion are not currently available, so "
-    "do not claim to have added or deleted an event. "
+    "information. You can create events when the user asks and delete events after "
+    "looking up the matching event. Check for calendar conflicts before creating an event. "
     "When searching Gmail for a date, try reasonable date formats such as 'Oct 8', "
     "'October 8', '10/8', and '8/10' rather than relying on one exact spelling. "
     "Check matching email contents to confirm the event date before reporting a match. "
@@ -123,7 +123,7 @@ def google_login(request: Request):
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/gmail.readonly",
+        "scope": "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly",
         "access_type": "offline",
         "prompt": "consent",
         "state": state,

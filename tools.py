@@ -49,6 +49,7 @@ def get_calendar_events(date: str, refresh_token: str | None = None) -> str:
         "date": date,
         "events": [
             {
+                "id": event.get("id"),
                 "summary": event.get("summary", "(No title)"),
                 "start": event.get("start", {}).get("dateTime", event.get("start", {}).get("date")),
                 "end": event.get("end", {}).get("dateTime", event.get("end", {}).get("date")),
@@ -56,6 +57,53 @@ def get_calendar_events(date: str, refresh_token: str | None = None) -> str:
             for event in events
         ],
     })
+
+
+def create_calendar_event(
+    summary: str,
+    start: str,
+    end: str,
+    refresh_token: str | None = None,
+) -> str:
+    """Create an event in the primary Google Calendar."""
+    if not refresh_token:
+        return json.dumps({"error": "Sign in with Google first at /auth/google."})
+
+    try:
+        access_token = get_access_token(refresh_token)
+        response = requests.post(
+            GOOGLE_EVENTS_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "summary": summary,
+                "start": {"dateTime": start, "timeZone": "America/New_York"},
+                "end": {"dateTime": end, "timeZone": "America/New_York"},
+            },
+        )
+        response.raise_for_status()
+    except requests.RequestException as error:
+        return json.dumps({"error": f"Calendar event creation failed: {error}"})
+
+    event = response.json()
+    return json.dumps({"created": True, "id": event.get("id"), "summary": summary})
+
+
+def delete_calendar_event(event_id: str, refresh_token: str | None = None) -> str:
+    """Delete an event from the primary Google Calendar by its event ID."""
+    if not refresh_token:
+        return json.dumps({"error": "Sign in with Google first at /auth/google."})
+
+    try:
+        access_token = get_access_token(refresh_token)
+        response = requests.delete(
+            f"{GOOGLE_EVENTS_URL}/{event_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+    except requests.RequestException as error:
+        return json.dumps({"error": f"Calendar event deletion failed: {error}"})
+
+    return json.dumps({"deleted": True, "id": event_id})
 
 
 def search_gmail(query: str, refresh_token: str | None = None) -> str:
@@ -109,6 +157,36 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "create_calendar_event",
+            "description": "Create an event in the signed-in user's primary Google Calendar. Use Eastern Time for start and end.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string", "description": "Short event title."},
+                    "start": {"type": "string", "description": "Start datetime in ISO 8601 format with ET offset, for example 2026-10-04T13:00:00-04:00."},
+                    "end": {"type": "string", "description": "End datetime in ISO 8601 format with ET offset."},
+                },
+                "required": ["summary", "start", "end"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_calendar_event",
+            "description": "Delete an event from the signed-in user's primary Google Calendar by its event ID. Look up the event first.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "string", "description": "Event ID returned by get_calendar_events."},
+                },
+                "required": ["event_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_gmail",
             "description": "Search the signed-in user's Gmail messages and return matching snippets. For date searches, use a date format such as 'Oct 8', 'October 8', '10/8', or '8/10'; verify the actual event date from the returned email snippet.",
             "parameters": {
@@ -137,7 +215,12 @@ TOOLS = [
 ]
 
 # What the harness runs: tool name -> Python function.
-TOOL_MAP = {"get_calendar_events": get_calendar_events, "search_gmail": search_gmail}
+TOOL_MAP = {
+    "get_calendar_events": get_calendar_events,
+    "create_calendar_event": create_calendar_event,
+    "delete_calendar_event": delete_calendar_event,
+    "search_gmail": search_gmail,
+}
 
 
 def run_tool(name: str, args: dict, refresh_token: str | None = None) -> str:
