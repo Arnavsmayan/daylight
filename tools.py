@@ -97,7 +97,8 @@ def search_gmail(query: str, refresh_token: str | None = None) -> str:
                 "snippet": item.get("snippet", ""),
             })
     except requests.RequestException as error:
-        return json.dumps({"error": f"Gmail search failed: {error}"})
+        detail = error.response.text[:500] if error.response is not None else str(error)
+        return json.dumps({"error": f"Gmail search failed: {detail}"})
 
     return json.dumps({"query": query, "messages": results})
 
