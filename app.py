@@ -45,17 +45,12 @@ MAX_TOOL_ROUNDS = 15
 # --- The Harness ---
 
 
-def run_agent(
-    messages: list[dict],
-    refresh_token: str | None = None,
-    session_id: str | None = None,
-    initial_tool_calls: list[dict] | None = None,
-) -> tuple[str, list[dict]]:
+def run_agent(messages: list[dict], refresh_token: str | None = None) -> tuple[str, list[dict]]:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text and a record of every tool call made along the way.
     """
-    tool_calls = initial_tool_calls or []
+    tool_calls = []
 
     for _ in range(MAX_TOOL_ROUNDS):
         reply = litellm.completion(
@@ -76,19 +71,7 @@ def run_agent(
         # The harness, not the model, runs each tool and appends the result
         for call in reply.tool_calls:
             args = json.loads(call.function.arguments)
-            if call.function.name in {"create_calendar_event", "delete_calendar_event"}:
-                action = {"name": call.function.name, "args": args}
-                if session_id and session_id not in pending_calendar_actions:
-                    pending_calendar_actions[session_id] = {**action, "asked": False}
-                pending = pending_calendar_actions.get(session_id, action)
-                result = json.dumps({
-                    "confirmation_required": True,
-                    "action": pending["name"],
-                    "details": pending["args"],
-                    "message": "Do not execute this yet. Present the exact action to the user and ask for confirmation.",
-                })
-            else:
-                result = run_tool(call.function.name, args, refresh_token)
+            result = run_tool(call.function.name, args, refresh_token)
             tool_calls += [{"name": call.function.name, "args": args, "result": result}]
 
             messages += [{"role": "tool", "tool_call_id": call.id, "content": result}]
@@ -102,13 +85,6 @@ def run_agent(
 sessions: dict[str, list] = {}
 calendar_tokens: dict[str, str] = {}
 oauth_states: dict[str, str] = {}
-pending_calendar_actions: dict[str, dict] = {}
-
-
-def is_explicit_confirmation(message: str) -> bool:
-    return message.strip().lower().strip(" .,!?:;") in {
-        "yes", "yes please", "confirm", "go ahead", "do it",
-    }
 
 
 def google_redirect_uri(request: Request) -> str:
@@ -230,29 +206,9 @@ def chat(request: ChatRequest, http_request: Request):
 
     try:
         browser_id = http_request.cookies.get("daylight_user")
-        refresh_token = calendar_tokens.get(browser_id)
-        tool_calls = []
-        pending = pending_calendar_actions.get(session_id)
-        if pending:
-            if pending.get("asked") and is_explicit_confirmation(request.message):
-                pending_calendar_actions.pop(session_id, None)
-                result = run_tool(pending["name"], pending["args"], refresh_token)
-                tool_calls.append({
-                    "name": pending["name"],
-                    "args": pending["args"],
-                    "result": result,
-                })
-                sessions[session_id].append({
-                    "role": "system",
-                    "content": "The user explicitly confirmed the pending calendar action. "
-                    "It has now been attempted. Do not repeat the action. Tool result: " + result,
-                })
-            else:
-                pending_calendar_actions.pop(session_id, None)
-        response, tool_calls = run_agent(sessions[session_id], refresh_token, session_id, tool_calls)
-        pending = pending_calendar_actions.get(session_id)
-        if pending:
-            pending["asked"] = "?" in response
+        response, tool_calls = run_agent(
+            sessions[session_id], calendar_tokens.get(browser_id)
+        )
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         response, tool_calls = f"Model call failed: {type(e).__name__}: {str(e)[:300]}", []
@@ -263,7 +219,6 @@ def chat(request: ChatRequest, http_request: Request):
 @app.post("/clear")
 def clear(session_id: str | None = None):
     sessions.pop(session_id, None)
-    pending_calendar_actions.pop(session_id, None)
     return {"status": "ok"}
 
 

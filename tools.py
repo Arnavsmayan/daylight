@@ -158,7 +158,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_calendar_event",
-            "description": "Create an event in the signed-in user's primary Google Calendar. Use Eastern Time for start and end.",
+            "description": "Create an event in the signed-in user's primary Google Calendar. Ask the user to confirm the exact event and time first, and only call this tool after they confirm. Use Eastern Time for start and end.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -174,7 +174,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delete_calendar_event",
-            "description": "Delete an event from the signed-in user's primary Google Calendar by its event ID. Look up the event first.",
+            "description": "Delete an event from the signed-in user's primary Google Calendar by its event ID. Look up the event and ask the user to confirm deleting it first. Only call this tool after they confirm.",
             "parameters": {
                 "type": "object",
                 "properties": {
