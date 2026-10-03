@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime
@@ -24,8 +25,10 @@ SYSTEM_PROMPT = (
     "details and commitments, such as an event time mentioned in an email. Use that "
     "information to answer schedule questions and identify possible calendar conflicts. "
     "Do not offer to draft or send emails; email is only used to find calendar-related "
-    "information. You can create events when the user asks and delete events after "
-    "looking up the matching event. Check for calendar conflicts before creating an event. "
+    "information. To schedule or delete an event, first identify the exact event or "
+    "proposed time and ask the user to confirm it. Do not call a create or delete tool "
+    "until the user clearly confirms that exact action. Check for calendar conflicts "
+    "before proposing a new event. "
     "When searching Gmail for a date, try reasonable date formats such as 'Oct 8', "
     "'October 8', '10/8', and '8/10' rather than relying on one exact spelling. "
     "Check matching email contents to confirm the event date before reporting a match. "
@@ -43,12 +46,17 @@ MAX_TOOL_ROUNDS = 15
 # --- The Harness ---
 
 
-def run_agent(messages: list[dict], refresh_token: str | None = None) -> tuple[str, list[dict]]:
+def run_agent(
+    messages: list[dict],
+    refresh_token: str | None = None,
+    session_id: str | None = None,
+    initial_tool_calls: list[dict] | None = None,
+) -> tuple[str, list[dict]]:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text and a record of every tool call made along the way.
     """
-    tool_calls = []
+    tool_calls = initial_tool_calls or []
 
     for _ in range(MAX_TOOL_ROUNDS):
         reply = litellm.completion(
@@ -69,7 +77,19 @@ def run_agent(messages: list[dict], refresh_token: str | None = None) -> tuple[s
         # The harness, not the model, runs each tool and appends the result
         for call in reply.tool_calls:
             args = json.loads(call.function.arguments)
-            result = run_tool(call.function.name, args, refresh_token)
+            if call.function.name in {"create_calendar_event", "delete_calendar_event"}:
+                action = {"name": call.function.name, "args": args}
+                if session_id and session_id not in pending_calendar_actions:
+                    pending_calendar_actions[session_id] = {**action, "asked": False}
+                pending = pending_calendar_actions.get(session_id, action)
+                result = json.dumps({
+                    "confirmation_required": True,
+                    "action": pending["name"],
+                    "details": pending["args"],
+                    "message": "Do not execute this yet. Present the exact action to the user and ask for confirmation.",
+                })
+            else:
+                result = run_tool(call.function.name, args, refresh_token)
             tool_calls += [{"name": call.function.name, "args": args, "result": result}]
 
             messages += [{"role": "tool", "tool_call_id": call.id, "content": result}]
@@ -83,6 +103,23 @@ def run_agent(messages: list[dict], refresh_token: str | None = None) -> tuple[s
 sessions: dict[str, list] = {}
 calendar_tokens: dict[str, str] = {}
 oauth_states: dict[str, str] = {}
+pending_calendar_actions: dict[str, dict] = {}
+
+
+def is_explicit_confirmation(message: str) -> bool:
+    normalized = re.sub(r"[^a-z ]", " ", message.lower())
+    normalized = " ".join(normalized.split())
+    return normalized in {
+        "yes", "yes please", "confirm", "confirmed", "go ahead", "do it",
+        "proceed", "add it", "delete it", "thats right",
+    }
+
+
+def asks_for_confirmation(message: str) -> bool:
+    text = message.lower()
+    return "?" in text and any(phrase in text for phrase in (
+        "should i", "shall i", "would you like", "do you want me to", "confirm",
+    ))
 
 
 def google_redirect_uri(request: Request) -> str:
@@ -204,7 +241,31 @@ def chat(request: ChatRequest, http_request: Request):
 
     try:
         browser_id = http_request.cookies.get("daylight_user")
-        response, tool_calls = run_agent(sessions[session_id], calendar_tokens.get(browser_id))
+        refresh_token = calendar_tokens.get(browser_id)
+        initial_tool_calls = []
+        pending = pending_calendar_actions.get(session_id)
+        if pending:
+            if pending.get("asked") and is_explicit_confirmation(request.message):
+                pending_calendar_actions.pop(session_id, None)
+                result = run_tool(pending["name"], pending["args"], refresh_token)
+                initial_tool_calls.append({
+                    "name": pending["name"],
+                    "args": pending["args"],
+                    "result": result,
+                })
+                sessions[session_id].append({
+                    "role": "system",
+                    "content": "The user explicitly confirmed the pending calendar action. "
+                    "It has now been attempted. Do not repeat the action. Tool result: " + result,
+                })
+            else:
+                pending_calendar_actions.pop(session_id, None)
+        response, tool_calls = run_agent(
+            sessions[session_id], refresh_token, session_id, initial_tool_calls
+        )
+        pending = pending_calendar_actions.get(session_id)
+        if pending:
+            pending["asked"] = asks_for_confirmation(response)
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         response, tool_calls = f"Model call failed: {type(e).__name__}: {str(e)[:300]}", []
@@ -215,6 +276,7 @@ def chat(request: ChatRequest, http_request: Request):
 @app.post("/clear")
 def clear(session_id: str | None = None):
     sessions.pop(session_id, None)
+    pending_calendar_actions.pop(session_id, None)
     return {"status": "ok"}
 
 
