@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import secrets
 import uuid
 from datetime import datetime
@@ -107,19 +106,9 @@ pending_calendar_actions: dict[str, dict] = {}
 
 
 def is_explicit_confirmation(message: str) -> bool:
-    normalized = re.sub(r"[^a-z ]", " ", message.lower())
-    normalized = " ".join(normalized.split())
-    return normalized in {
-        "yes", "yes please", "confirm", "confirmed", "go ahead", "do it",
-        "proceed", "add it", "delete it", "thats right",
+    return message.strip().lower().strip(" .,!?:;") in {
+        "yes", "yes please", "confirm", "go ahead", "do it",
     }
-
-
-def asks_for_confirmation(message: str) -> bool:
-    text = message.lower()
-    return "?" in text and any(phrase in text for phrase in (
-        "should i", "shall i", "would you like", "do you want me to", "confirm",
-    ))
 
 
 def google_redirect_uri(request: Request) -> str:
@@ -242,13 +231,13 @@ def chat(request: ChatRequest, http_request: Request):
     try:
         browser_id = http_request.cookies.get("daylight_user")
         refresh_token = calendar_tokens.get(browser_id)
-        initial_tool_calls = []
+        tool_calls = []
         pending = pending_calendar_actions.get(session_id)
         if pending:
             if pending.get("asked") and is_explicit_confirmation(request.message):
                 pending_calendar_actions.pop(session_id, None)
                 result = run_tool(pending["name"], pending["args"], refresh_token)
-                initial_tool_calls.append({
+                tool_calls.append({
                     "name": pending["name"],
                     "args": pending["args"],
                     "result": result,
@@ -260,12 +249,10 @@ def chat(request: ChatRequest, http_request: Request):
                 })
             else:
                 pending_calendar_actions.pop(session_id, None)
-        response, tool_calls = run_agent(
-            sessions[session_id], refresh_token, session_id, initial_tool_calls
-        )
+        response, tool_calls = run_agent(sessions[session_id], refresh_token, session_id, tool_calls)
         pending = pending_calendar_actions.get(session_id)
         if pending:
-            pending["asked"] = asks_for_confirmation(response)
+            pending["asked"] = "?" in response
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         response, tool_calls = f"Model call failed: {type(e).__name__}: {str(e)[:300]}", []
