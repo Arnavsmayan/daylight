@@ -6,9 +6,9 @@ Plans live in two places: your calendar and your inbox. Daylight brings them int
 
 | You ask | Daylight does |
 | --- | --- |
-| "What's on my calendar tomorrow?" | Lays out what's already on your day. |
-| "Check my email and calendar. When do I have two free hours for a drive this week?" | Brings inbox commitments and calendar events together to find an open window. |
-| "Find a free two-hour workout slot this Sunday and add it to my calendar." | Checks for conflicts, suggests a time, then waits for your go-ahead. |
+| "What's on my calendar tomorrow?" | Pulls your events into a clear rundown, with the times you need to plan your day. |
+| "Check my email and calendar. When do I have two free hours for a drive this week?" | Checks email for extra commitments, compares them with your calendar, and finds a two-hour opening. |
+| "Find a free two-hour workout slot this Sunday and add it to my calendar." | Checks Sunday's schedule, suggests an open two-hour window, then adds it after you say yes. |
 
 ## Tools
 
