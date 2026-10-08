@@ -14,10 +14,10 @@ Plans live in two places: your calendar and your inbox. Daylight brings them int
 
 | Tool | Data source | What it does |
 | --- | --- | --- |
-| `get_calendar_events` | Google Calendar API | Sees what's already on the calendar. |
-| `search_gmail` | Gmail API | Surfaces plans and commitments from email. |
-| `create_calendar_event` | Google Calendar API | Adds the plan you confirmed. |
-| `delete_calendar_event` | Google Calendar API | Removes the event you chose. |
+| `get_calendar_events` | Google Calendar API | Pulls the day's events and their times, giving Daylight a clear view of what's booked. |
+| `search_gmail` | Gmail API | Searches matching messages and surfaces sender, subject, date, and snippets where plans may be hiding. |
+| `create_calendar_event` | Google Calendar API | Adds the agreed event title and ET start/end times to your calendar after you confirm. |
+| `delete_calendar_event` | Google Calendar API | Removes the selected event by its calendar ID after you confirm the change. |
 
 Gemini chooses the right tools and turns their results into a clear answer. Every tool call is visible in the chat, so you can follow Daylight's work.
 
