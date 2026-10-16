@@ -2,6 +2,9 @@
 
 import json
 import os
+from datetime import date as calendar_date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
 import requests
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -23,19 +26,30 @@ def get_access_token(refresh_token: str) -> str:
     return response.json()["access_token"]
 
 
-def get_calendar_events(date: str, refresh_token: str | None = None) -> str:
-    """Get events from the primary Google Calendar."""
+def get_calendar_events(
+    date: str, end_date: str | None = None, refresh_token: str | None = None
+) -> str:
+    """Get events from the primary Google Calendar for an inclusive ET date range."""
     if not refresh_token:
         return json.dumps({"error": "Sign in with Google first at /auth/google."})
 
+    try:
+        first_day = calendar_date.fromisoformat(date)
+        last_day = calendar_date.fromisoformat(end_date) if end_date else first_day
+        if last_day < first_day:
+            return json.dumps({"error": "end_date must be on or after date."})
+    except ValueError:
+        return json.dumps({"error": "Use dates in YYYY-MM-DD format."})
+
+    eastern = ZoneInfo("America/New_York")
     try:
         access_token = get_access_token(refresh_token)
         response = requests.get(
             GOOGLE_EVENTS_URL,
             headers={"Authorization": f"Bearer {access_token}"},
             params={
-                "timeMin": f"{date}T00:00:00Z",
-                "timeMax": f"{date}T23:59:59Z",
+                "timeMin": datetime.combine(first_day, time.min, eastern).isoformat(),
+                "timeMax": datetime.combine(last_day + timedelta(days=1), time.min, eastern).isoformat(),
                 "singleEvents": "true",
                 "orderBy": "startTime",
             },
@@ -47,6 +61,7 @@ def get_calendar_events(date: str, refresh_token: str | None = None) -> str:
 
     return json.dumps({
         "date": date,
+        "end_date": end_date or date,
         "events": [
             {
                 "id": event.get("id"),
@@ -202,11 +217,12 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_calendar_events",
-            "description": "Look up events in the signed-in user's Google Calendar for a date.",
+            "description": "Look up events in the signed-in user's Google Calendar for one day or an inclusive date range in Eastern Time.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format."},
+                    "date": {"type": "string", "description": "First date in YYYY-MM-DD format."},
+                    "end_date": {"type": "string", "description": "Optional last date in YYYY-MM-DD format. Include it for a range."},
                 },
                 "required": ["date"],
             },
