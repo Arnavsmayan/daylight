@@ -1,43 +1,45 @@
 # Daylight
 
-**Your calendar knows what is booked. Your inbox knows what is coming. Daylight looks at both.**
+**Your calendar is only half the story. Daylight finds the rest.**
 
-Daylight is a conversational calendar planner built around a simple problem: plans do not always make it onto the calendar. A class might be scheduled in Google Calendar, while the details of an interview, workshop, or event are still buried in Gmail. Daylight brings those signals into one place, helps find room for what matters next, and can make the calendar change after you approve it.
+Classes are on your calendar. The interview invitation is in your inbox. The two hours you need to finish your project are somewhere in between. Daylight pulls those scattered pieces into one conversation, finds a time that makes sense, and helps turn an intention into an actual calendar event.
+
+**Ask what is happening. Discover what you missed. Make room for what matters.**
 
 ![Daylight planner interface with sample conversation and visible tool calls](assets/daylight-preview.png)
 
 *Illustrative UI preview with sample data.*
 
-## From question to plan
+## Make time visible
 
 Ask Daylight what is ahead, what might conflict, or where a new activity could fit. It can:
 
 | Need | What Daylight does |
 | --- | --- |
-| **Get oriented** | Reads Google Calendar events for a day or date range and gives a clear schedule in Eastern Time. |
-| **Catch the plan in your inbox** | Searches Gmail for relevant messages and uses their subjects and snippets to spot commitments that may not be on the calendar. |
-| **Find breathing room** | Compares known commitments with a requested duration and suggests an available time to consider. |
-| **Put it on the calendar** | Proposes an exact title and time, asks for confirmation, then creates the Google Calendar event. |
-| **Clear a slot** | Looks up the event you mean, asks for confirmation, then deletes that specific event. |
+| **See the day, not just the grid** | Reads Google Calendar events for a day or date range and gives a clear schedule in Eastern Time. |
+| **Uncover the hidden commitment** | Searches Gmail for relevant messages and uses their subjects and snippets to spot plans that may not be on the calendar. |
+| **Find the opening** | Compares known commitments with a requested duration and suggests an available time to consider. |
+| **Turn a plan into time** | Proposes an exact title and time, asks for confirmation, then creates the Google Calendar event. |
+| **Take back a slot** | Looks up the event you mean, asks for confirmation, then deletes that specific event. |
 
 For general schedule and free-time questions, Daylight is instructed to consult both Calendar and Gmail by default. You can also ask for calendar-only results. It keeps the conversation context for the session, so a follow-up like "Yes, add it" can refer to the time it just proposed.
 
-### A conversation, not a form
+### From "I should" to "it is scheduled"
 
 ```text
-You:      I need two hours to work on my project this Sunday.
-Daylight: I checked your calendar and looked for related plans in Gmail.
-          Sunday afternoon looks open. Should I add "Project Work"
-          from 2:00 to 4:00 PM ET?
+You:      Find me two hours for project work this Sunday.
+Daylight: Your calendar is open after lunch, but I found an email about
+          a workshop at 4:30 PM. I can add "Project Work" from 2:00
+          to 4:00 PM ET. Should I put that on your calendar?
 You:      Yes, add it.
 Daylight: Done. "Project Work" is on your calendar.
 ```
 
 *Example flow. Actual suggestions depend on the connected account's events and email search results.*
 
-## How it works
+## An answer with evidence, not a guess
 
-Daylight is an agent with tools, not a chat window that guesses at your schedule. Gemini interprets the request and chooses a tool. The FastAPI backend executes the call against Google, gives the result back to Gemini, and repeats until it has an answer. The chat shows each tool call in an expandable trace.
+Daylight does not invent a schedule from a prompt. Gemini interprets the request and chooses a tool. The FastAPI backend calls Google, feeds the result back to Gemini, and repeats until it has an answer. Every tool call stays visible in an expandable trace, so you can see what informed the response.
 
 ```mermaid
 flowchart LR
@@ -49,7 +51,7 @@ flowchart LR
     A --> UI
 ```
 
-### The four tools
+### Four tools, one planning loop
 
 | Tool | Inputs | What comes back |
 | --- | --- | --- |
